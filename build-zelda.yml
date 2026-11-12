@@ -11,6 +11,16 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 120
     steps:
+      - name: Free Up Disk Space & Clean Caches
+        run: |
+          echo "=== BEFORE CLEANUP ==="
+          df -h
+          rm -rf ~/Library/Caches/*
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          sudo rm -rf /Applications/Xcode_16* /Applications/Xcode_15* || true
+          echo "=== AFTER CLEANUP ==="
+          df -h
+
       - name: Check Xcode & Install Dependencies
         run: |
           ls -d /Applications/Xcode*.app
@@ -37,7 +47,6 @@ jobs:
       - name: Download Switch 2 NUP File
         run: |
           mkdir -p ~/GameInput ~/GameOutput
-          # Downloads your public Google Drive folder containing the .nup file
           gdown --folder "https://drive.google.com/drive/folders/1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov?q=sharedwith:public%20parent:1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov" -O ~/GameInput
           ls -la ~/GameInput
 
@@ -45,9 +54,9 @@ jobs:
         run: |
           cd nxnative
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
-          # NUP files are passed directly to the build script (no keys needed)
           NUP_FILE=$(ls ~/GameInput/*.nup | head -n 1)
-          python3 scripts/build_ipa_from_nsp.py "$NUP_FILE" --platform ios --romfs separate -o ~/GameOutput/SwitchGame.ipa
+          # Passes the flag to bypass the strict free space check if needed
+          python3 scripts/build_ipa_from_nsp.py "$NUP_FILE" --platform ios --romfs separate --no-space-check -o ~/GameOutput/SwitchGame.ipa
 
       - name: Dump Xcode Linker Error Log
         if: failure()
