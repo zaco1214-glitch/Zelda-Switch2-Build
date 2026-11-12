@@ -1,0 +1,81 @@
+name: Build Switch 2 IPA
+
+on:
+  workflow_dispatch:
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    steps:
+      - name: Check Xcode & Install Dependencies
+        run: |
+          ls -d /Applications/Xcode*.app
+          xcodebuild -version
+          xcodebuild -downloadComponent MetalToolchain || true
+          xcrun -sdk iphoneos metal --version
+          brew install xcodegen zstd glslang
+          python3 -m pip install --break-system-packages lz4 "capstone>=5,<6" fonttools nsz zbic gdown
+
+      - name: Clone nxnative
+        run: |
+          HOST="github.com"
+          REPO="seedds/nxnative.git"
+          git clone "https://${HOST}/${REPO}"
+          cd nxnative
+          python3 dm/gfx/tools/own_compilers.py --check-metal || true
+
+      - name: Patch Missing Symbol Error
+        run: |
+          cd nxnative
+          echo "void _probe_atrace(void) {}" > dm/ios/Sources/atrace_stub.c
+          echo "void _probe_atrace(void);" >> dm/ios/Sources/front_ios.m
+
+      - name: Download Switch 2 NUP File
+        run: |
+          mkdir -p ~/GameInput ~/GameOutput
+          # Downloads your public Google Drive folder containing the .nup file
+          gdown --folder "https://drive.google.com/drive/folders/1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov?q=sharedwith:public%20parent:1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov" -O ~/GameInput
+          ls -la ~/GameInput
+
+      - name: Build Standalone iOS IPA from NUP
+        run: |
+          cd nxnative
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          # NUP files are passed directly to the build script (no keys needed)
+          NUP_FILE=$(ls ~/GameInput/*.nup | head -n 1)
+          python3 scripts/build_ipa_from_nsp.py "$NUP_FILE" --platform ios --romfs separate -o ~/GameOutput/SwitchGame.ipa
+
+      - name: Dump Xcode Linker Error Log
+        if: failure()
+        run: |
+          echo "=== XCODE BUILD LOG ==="
+          tail -n 100 ~/GameInput/*_build/ipa/build/ios/pkg/build.log || true
+          echo "=== BUILD IPA LOG ==="
+          tail -n 100 ~/GameInput/*_build/logs/build_ipa.log || true
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwitchGame-IPA
+          path: ~/GameOutput/SwitchGame.ipa
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Collect Game Files
+        run: |
+          IMG=$(ls ~/GameInput/*_build/extract/v*/RomFS.img | sort -V | tail -n 1)
+          echo "Game files: $IMG"
+          mv "$IMG" ~/GameOutput/romfs.img
+          ls -la ~/GameOutput
+
+      - name: Upload Game Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwitchGame-RomFS
+          path: ~/GameOutput/romfs.img
+          if-no-files-found: error
+          retention-days: 1
