@@ -11,13 +11,15 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 120
     steps:
-      - name: Free Up Disk Space & Clean Caches
+      - name: Free Up macOS Disk Space
         run: |
           echo "=== BEFORE CLEANUP ==="
           df -h
-          rm -rf ~/Library/Caches/*
-          rm -rf ~/Library/Developer/Xcode/DerivedData/*
-          sudo rm -rf /Applications/Xcode_16* /Applications/Xcode_15* || true
+          sudo rm -rf /Library/Developer/CoreSimulator/* || true
+          sudo rm -rf ~/Library/Caches/* || true
+          sudo rm -rf ~/Library/Developer/Xcode/DerivedData/* || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache || true
           echo "=== AFTER CLEANUP ==="
           df -h
 
@@ -55,7 +57,7 @@ jobs:
           cd nxnative
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
           NUP_FILE=$(ls ~/GameInput/*.nup | head -n 1)
-          # Passes the flag to bypass the strict free space check if needed
+          # --no-space-check bypasses the 30GB check entirely
           python3 scripts/build_ipa_from_nsp.py "$NUP_FILE" --platform ios --romfs separate --no-space-check -o ~/GameOutput/SwitchGame.ipa
 
       - name: Dump Xcode Linker Error Log
