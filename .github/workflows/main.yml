@@ -55,7 +55,7 @@ jobs:
       - name: Download Switch 2 NUP File
         run: |
           mkdir -p ~/GameInput ~/GameOutput /tmp/nxwork
-          gdown "https://drive.google.com/drive/folders/12D2V4drzfNCP50goG75hBzVkefjfJ64I?usp=sharing" -O ~/GameInput
+          gdown "https://drive.google.com/drive/folders/1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov?usp=sharing" -O ~/GameInput
           ls -lh ~/GameInput
 
       - name: Build Standalone iOS IPA from NUP
