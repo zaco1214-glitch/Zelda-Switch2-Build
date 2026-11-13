@@ -14,14 +14,20 @@ jobs:
       - name: Free Up macOS Disk Space
         run: |
           echo "=== BEFORE CLEANUP ==="
-          df -h
+          df -h /
           sudo rm -rf /Library/Developer/CoreSimulator/* || true
           sudo rm -rf ~/Library/Caches/* || true
           sudo rm -rf ~/Library/Developer/Xcode/DerivedData/* || true
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /opt/hostedtoolcache || true
+          for x in /Applications/Xcode*.app; do
+            if [ "$x" != "/Applications/Xcode_27.2.app" ]; then
+              echo "Removing $x"
+              sudo rm -rf "$x" || true
+            fi
+          done
           echo "=== AFTER CLEANUP ==="
-          df -h
+          df -h /
 
       - name: Check Xcode & Install Dependencies
         run: |
@@ -48,25 +54,24 @@ jobs:
 
       - name: Download Switch 2 NUP File
         run: |
-          mkdir -p ~/GameInput ~/GameOutput
-          gdown --folder "https://drive.google.com/drive/folders/1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov" -O ~/GameInput
-          ls -la ~/GameInput
+          mkdir -p ~/GameInput ~/GameOutput /tmp/nxwork
+          gdown "https://drive.google.com/drive/folders/12D2V4drzfNCP50goG75hBzVkefjfJ64I?usp=sharing" -O ~/GameInput
+          ls -lh ~/GameInput
 
       - name: Build Standalone iOS IPA from NUP
         run: |
           cd nxnative
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
           NUP_FILE=$(ls ~/GameInput/*.nup | head -n 1)
-          # --no-space-check bypasses the 30GB check entirely
-          python3 scripts/build_ipa_from_nsp.py "$NUP_FILE" --platform ios --romfs separate --no-space-check -o ~/GameOutput/SwitchGame.ipa
+          python3 scripts/build_ipa_from_nsp.py "$NUP_FILE" --platform ios --romfs separate --no-heap-check --work-dir /tmp/nxwork -o ~/GameOutput/SwitchGame.ipa
 
       - name: Dump Xcode Linker Error Log
         if: failure()
         run: |
           echo "=== XCODE BUILD LOG ==="
-          tail -n 100 ~/GameInput/*_build/ipa/build/ios/pkg/build.log || true
+          tail -n 100 /tmp/nxwork/*_build/ipa/build/ios/pkg/build.log || true
           echo "=== BUILD IPA LOG ==="
-          tail -n 100 ~/GameInput/*_build/logs/build_ipa.log || true
+          tail -n 100 /tmp/nxwork/*_build/logs/build_ipa.log || true
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
@@ -78,10 +83,10 @@ jobs:
 
       - name: Collect Game Files
         run: |
-          IMG=$(ls ~/GameInput/*_build/extract/v*/RomFS.img | sort -V | tail -n 1)
+          IMG=$(ls /tmp/nxwork/*_build/extract/v*/RomFS.img | sort -V | tail -n 1)
           echo "Game files: $IMG"
           mv "$IMG" ~/GameOutput/romfs.img
-          ls -la ~/GameOutput
+          ls -lh ~/GameOutput
 
       - name: Upload Game Files
         uses: actions/upload-artifact@v4
