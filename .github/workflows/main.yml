@@ -26,6 +26,7 @@ jobs:
           for x in /Applications/Xcode*.app; do
             REAL_X=$(readlink -f "$x" || echo "$x")
             if [ "$REAL_X" != "$KEEP_XCODE" ] && [ ! -L "$x" ]; then
+              echo "Removing unused Xcode: $x"
               sudo rm -rf "$x" || true
             fi
           done
@@ -49,32 +50,25 @@ jobs:
           cd nxnative
           python3 dm/gfx/tools/own_compilers.py --check-metal || true
 
-      - name: Setup Global Statvfs Mock (No Source Edits)
+      - name: Setup Global Statvfs Mock
         run: |
-          # Drop a sitecustomize.py into Python site-packages to safely intercept disk space queries globally
-          python3 -c '
+          python3 - << 'EOF'
           import site, pathlib
           sp = site.getsitepackages()[0]
-          mock_code = """
-import os
-_orig_statvfs = os.statvfs
-class MockStatvfs(os.statvfs_result):
-    def __getattribute__(self, name):
-        if name == "f_bavail": return 500000000 # 500GB free blocks
-        if name == "f_bfree": return 500000000
-        return super().__getattribute__(name)
-
-def _new_statvfs(path):
-    res = _orig_statvfs(path)
-    # Wrap in our mock class keeping original block size
-    m = MockStatvfs(res)
-    return m
-
-os.statvfs = _new_statvfs
-"""
+          mock_code = """import os
+          _orig_statvfs = os.statvfs
+          class MockStatvfs(os.statvfs_result):
+              def __getattribute__(self, name):
+                  if name == "f_bavail": return 500000000
+                  if name == "f_bfree": return 500000000
+                  return super().__getattribute__(name)
+          def _new_statvfs(path):
+              return MockStatvfs(_orig_statvfs(path))
+          os.statvfs = _new_statvfs
+          """
           pathlib.Path(sp, "sitecustomize.py").write_text(mock_code)
-          print("Injected global statvfs mock into:", sp)
-          '
+          print("Successfully injected sitecustomize.py into:", sp)
+          EOF
           cd nxnative
           echo "void _probe_atrace(void) {}" > dm/ios/Sources/atrace_stub.c
           echo "void _probe_atrace(void);" >> dm/ios/Sources/front_ios.m
