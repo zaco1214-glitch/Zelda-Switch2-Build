@@ -52,10 +52,10 @@ jobs:
           echo "void _probe_atrace(void) {}" > dm/ios/Sources/atrace_stub.c
           echo "void _probe_atrace(void);" >> dm/ios/Sources/front_ios.m
 
-      - name: Download Switch 2 NUP File
+      - name: Download Switch 2 NUP File via Buzzheavier
         run: |
           mkdir -p ~/GameInput ~/GameOutput /tmp/nxwork
-          gdown "https://drive.google.com/drive/folders/1YC0NAjFewgaRmEZYIQxC6UNhTGSNK94H" -O ~/GameInput
+          curl -L -o ~/GameInput/zelda.nup "https://ts.buzzheavier.com/d/2p2y2pho4ey1?v=fcL-KzbFpEn39gzCIM2JWwxRtivQ7wkWrxax6Gy9oKyYN2r4VSdkFFV1Mx2Sr8qxb80SciVpiyQCfJVF5kFlDNUaFUD9-I_lPvwax9rYjAbSeEbJLLsQHCNgPRmVqlREhRi9aafHlrguWrDivJizuQPH-qaZgeXMKVLPSEetVYz7f1cmzwBVfS_mrvyOwKEbc4lHswUhOUrJp9p7AAvcKoPJa1aHltf1ua9Gu4G5CtLpRJCa3c0YIbMN3BQSNQh88SyXpVlJQimWZo1i0rJa5h5G9MSGXYatrQ"
           ls -lh ~/GameInput
 
       - name: Build Standalone iOS IPA from NUP
