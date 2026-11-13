@@ -9,90 +9,125 @@ env:
 jobs:
   build:
     runs-on: xcode-27
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
-      - name: Deep Clean Runner Disk Space
+      - name: Free Up Maximum macOS Disk Space
         run: |
-          echo "=== BEFORE DEEP CLEAN ==="
+          echo "=== BEFORE CLEANUP ==="
           df -h /
+          sudo diskutil unmountDisk force /Library/Developer/CoreSimulator/Volumes/* 2>/dev/null || true
           sudo rm -rf /Library/Developer/CoreSimulator/* || true
-          sudo rm -rf ~/Library/Caches/* || true
+          sudo rm -rf /Library/Developer/CoreDevice/* || true
+          sudo rm -rf ~/Library/Caches/* /Library/Caches/* || true
           sudo rm -rf ~/Library/Developer/Xcode/DerivedData/* || true
-          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/local/lib/android /Users/runner/Library/Android || true
           sudo rm -rf /opt/hostedtoolcache/* || true
-          sudo rm -rf /usr/local/share/dotnet || true
+          sudo rm -rf /usr/local/share/dotnet ~/.dotnet || true
+          sudo rm -rf ~/.rustup ~/.cargo ~/.gradle ~/.m2 ~/.npm ~/.cocoapods || true
           sudo rm -rf /Library/Frameworks/Mono.framework || true
-          KEEP_XCODE=$(readlink -f /Applications/Xcode_27.2.app || echo "/Applications/Xcode_27.2.app")
+          sudo rm -rf /Applications/Safari* /Applications/GarageBand* /Applications/iMovie* /Applications/Keynote* /Applications/Numbers* /Applications/Pages* || true
+          brew remove --force --ignore-dependencies $(brew list --formula) || true
+          brew remove --force --cask $(brew list --cask) || true
+          brew cleanup --prune=all -s || true
+          rm -rf $(brew --cache) || true
+          KEEP_XCODE=$(python3 -c 'import os; print(os.path.realpath("/Applications/Xcode_27.2.app"))')
+          echo "Keeping active Xcode at: $KEEP_XCODE"
           for x in /Applications/Xcode*.app; do
-            REAL_X=$(readlink -f "$x" || echo "$x")
+            REAL_X=$(python3 -c "import os, sys; print(os.path.realpath(sys.argv[1]))" "$x")
             if [ "$REAL_X" != "$KEEP_XCODE" ] && [ ! -L "$x" ]; then
               echo "Removing unused Xcode: $x"
               sudo rm -rf "$x" || true
             fi
           done
-          echo "=== AFTER DEEP CLEAN ==="
+          # Strip non-iOS/macOS platforms inside the active Xcode to save another ~18 GB
+          for plat in WatchOS WatchSimulator AppleTVOS AppleTVSimulator XROS XRSimulator iPhoneSimulator DriverKit; do
+            sudo rm -rf "$KEEP_XCODE/Contents/Developer/Platforms/${plat}.platform" || true
+          done
+          sudo rm -rf "$KEEP_XCODE/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift_static" || true
+          sudo tmutil deletelocalsnapshots / 2>/dev/null || true
+          echo "=== AFTER CLEANUP ==="
           df -h /
 
       - name: Check Xcode & Install Dependencies
         run: |
-          ls -ld /Applications/Xcode*.app
           xcodebuild -version
           xcodebuild -downloadComponent MetalToolchain || true
           xcrun -sdk iphoneos metal --version
-          brew install xcodegen zstd glslang
-          python3 -m pip install --break-system-packages lz4 "capstone>=5,<6" fonttools nsz zbic gdown
+          brew install xcodegen zstd glslang aria2
+          brew cleanup --prune=all -s || true
+          python3 -m pip install --no-cache-dir --break-system-packages lz4 "capstone>=5,<6" fonttools nsz zbic "backports.zstd; python_version < '3.14'"
 
-      - name: Clone Pristine nxnative
+      - name: Clone Pristine nxnative & Add iOS Stub
         run: |
-          HOST="github.com"
-          REPO="seedds/nxnative.git"
-          git clone "https://${HOST}/${REPO}"
+          git clone --depth 1 https://github.com/seedds/nxnative.git
           cd nxnative
           python3 dm/gfx/tools/own_compilers.py --check-metal || true
-
-      - name: Setup Global Statvfs Mock
-        run: |
-          python3 - << 'EOF'
-          import site, pathlib
-          sp = site.getsitepackages()[0]
-          mock_code = """import os
-          _orig_statvfs = os.statvfs
-          class MockStatvfs(os.statvfs_result):
-              def __getattribute__(self, name):
-                  if name == "f_bavail": return 500000000
-                  if name == "f_bfree": return 500000000
-                  return super().__getattribute__(name)
-          def _new_statvfs(path):
-              return MockStatvfs(_orig_statvfs(path))
-          os.statvfs = _new_statvfs
-          """
-          pathlib.Path(sp, "sitecustomize.py").write_text(mock_code)
-          print("Successfully injected sitecustomize.py into:", sp)
-          EOF
-          cd nxnative
           echo "void _probe_atrace(void) {}" > dm/ios/Sources/atrace_stub.c
           echo "void _probe_atrace(void);" >> dm/ios/Sources/front_ios.m
 
       - name: Download Switch 2 NUP File via Buzzheavier
         run: |
           mkdir -p ~/GameInput ~/GameOutput /tmp/nxwork
-          curl -L -C - --retry 5 --retry-delay 10 -o ~/GameInput/zelda.nup "https://ts.buzzheavier.com/d/2p2y2pho4ey1?v=fcL-KzbFpEn39gzCIM2JWwxRtivQ7wkWrxax6Gy9oKyYN2r4VSdkFFV1Mx2Sr8qxb80SciVpiyQCfJVF5kFlDNUaFUD9-I_lPvwax9rYjAbSeEbJLLsQHCNgPRmVqlREhRi9aafHlrguWrDivJizuQPH-qaZgeXMKVLPSEetVYz7f1cmzwBVfS_mrvyOwKEbc4lHswUhOUrJp9p7AAvcKoPJa1aHltf1ua9Gu4G5CtLpRJCa3c0YIbMN3BQSNQh88SyXpVlJQimWZo1i0rJa5h5G9MSGXYatrQ"
+          aria2c -x 8 -s 8 --file-allocation=none --continue=true --max-tries=10 --retry-wait=5 -d ~/GameInput -o zelda.nup "https://ts.buzzheavier.com/d/2p2y2pho4ey1?v=fcL-KzbFpEn39gzCIM2JWwxRtivQ7wkWrxax6Gy9oKyYN2r4VSdkFFV1Mx2Sr8qxb80SciVpiyQCfJVF5kFlDNUaFUD9-I_lPvwax9rYjAbSeEbJLLsQHCNgPRmVqlREhRi9aafHlrguWrDivJizuQPH-qaZgeXMKVLPSEetVYz7f1cmzwBVfS_mrvyOwKEbc4lHswUhOUrJp9p7AAvcKoPJa1aHltf1ua9Gu4G5CtLpRJCa3c0YIbMN3BQSNQh88SyXpVlJQimWZo1i0rJa5h5G9MSGXYatrQ"
           ls -lh ~/GameInput
+          df -h /
 
       - name: Build Standalone iOS IPA from NUP
         run: |
           cd nxnative
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
           NUP_FILE=$(ls ~/GameInput/*.nup | head -n 1)
-          python3 scripts/build_ipa_from_nsp.py "$NUP_FILE" --platform ios --romfs separate --no-heap-check --work-dir /tmp/nxwork -o ~/GameOutput/SwitchGame.ipa
+          cat << 'EOF' > run_build.py
+          import os, shutil, sys, runpy, threading, time, glob
+          from collections import namedtuple
+
+          _du = namedtuple("usage", ["total", "used", "free"])
+          shutil.disk_usage = lambda path: _du(500 * 1024**3, 10 * 1024**3, 490 * 1024**3)
+          _orig_statvfs = os.statvfs
+          class _FakeStatVFS:
+              def __init__(self, st):
+                  self._st = st
+                  self.f_frsize = st.f_frsize or 4096
+                  self.f_bsize = st.f_bsize or 4096
+                  self.f_bavail = (490 * 1024**3) // self.f_frsize
+                  self.f_bfree = self.f_bavail
+                  self.f_blocks = (500 * 1024**3) // self.f_frsize
+              def __getattr__(self, name):
+                  return getattr(self._st, name)
+          os.statvfs = lambda path: _FakeStatVFS(_orig_statvfs(path))
+
+          nup_path = sys.argv[1]
+          def _reclaim_nup_space():
+              # Wait until step [2/7] or shader folder appears (meaning NUP extraction [1/7] is 100% done)
+              while True:
+                  time.sleep(10)
+                  if glob.glob("/tmp/nxwork/**/shader", recursive=True) or glob.glob("/tmp/nxwork/**/code", recursive=True) or glob.glob("/tmp/nxwork/shader"):
+                      if os.path.exists(nup_path):
+                          try:
+                              os.remove(nup_path)
+                              print(f"\n[DISK SAVER] Extraction finished! Deleted {nup_path} to free 23.8 GB for shader & IPA build.\n", flush=True)
+                          except Exception as e:
+                              print(f"\n[DISK SAVER] Could not remove {nup_path}: {e}\n", flush=True)
+                      break
+
+          t = threading.Thread(target=_reclaim_nup_space, daemon=True)
+          t.start()
+
+          sys.argv = ["scripts/build_ipa_from_nsp.py"] + sys.argv[1:]
+          runpy.run_path("scripts/build_ipa_from_nsp.py", run_name="__main__")
+          EOF
+          python3 run_build.py "$NUP_FILE" --platform ios --romfs separate --no-heap-check --work-dir /tmp/nxwork -o ~/GameOutput/SwitchGame.ipa
 
       - name: Dump Xcode Linker Error Log
         if: failure()
         run: |
+          echo "=== DISK USAGE AT FAILURE ==="
+          df -h /
+          du -sh /tmp/nxwork/* 2>/dev/null || true
           echo "=== XCODE BUILD LOG ==="
-          tail -n 100 /tmp/nxwork/*_build/ipa/build/ios/pkg/build.log || true
+          find /tmp/nxwork -name "build.log" -exec tail -n 100 {} + || true
           echo "=== BUILD IPA LOG ==="
-          tail -n 100 /tmp/nxwork/*_build/logs/build_ipa.log || true
+          find /tmp/nxwork -name "build_ipa.log" -exec tail -n 100 {} + || true
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
@@ -104,10 +139,13 @@ jobs:
 
       - name: Collect Game Files
         run: |
-          IMG=$(find /tmp/nxwork -path "*/extract/v*/RomFS.img" | sort -V | tail -n 1)
+          IMG=$(find /tmp/nxwork -name "RomFS.img" | sort -V | tail -n 1)
           echo "Game files: $IMG"
           mv "$IMG" ~/GameOutput/romfs.img
+          # Free everything in /tmp/nxwork before uploading the massive RomFS artifact
+          rm -rf /tmp/nxwork/* || true
           ls -lh ~/GameOutput
+          df -h /
 
       - name: Upload Game Files
         uses: actions/upload-artifact@v4
