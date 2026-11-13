@@ -20,7 +20,6 @@ jobs:
           sudo rm -rf ~/Library/Developer/Xcode/DerivedData/* || true
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /opt/hostedtoolcache || true
-          # Remove any Xcode versions other than 27.2 to reclaim 10-30+ GB
           for x in /Applications/Xcode*.app; do
             if [ "$x" != "/Applications/Xcode_27.2.app" ]; then
               echo "Removing $x"
@@ -56,7 +55,7 @@ jobs:
       - name: Download Switch 2 NUP File
         run: |
           mkdir -p ~/GameInput ~/GameOutput /tmp/nxwork
-          gdown "https://drive.google.com/file/d/1ui3g5lsLdNJaTc2vJfVPzIQZ7d1AGWRq/view?usp=sharing" -O ~/GameInput/zelda.nup
+          gdown "https://drive.google.com/drive/folders/12D2V4drzfNCP50goG75hBzVkefjfJ64I?usp=sharing" -O ~/GameInput
           ls -lh ~/GameInput
 
       - name: Build Standalone iOS IPA from NUP
