@@ -47,7 +47,7 @@ jobs:
       - name: Download Switch 2 NUP File
         run: |
           mkdir -p ~/GameInput ~/GameOutput
-          gdown --folder "https://drive.google.com/drive/folders/1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov?q=sharedwith:public%20parent:1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov" -O ~/GameInput
+          gdown --folder "https://drive.google.com/drive/folders/1sQTjoirS8x1oaiPABbETSwzKlA2PF1Ov" -O ~/GameInput
           ls -la ~/GameInput
 
       - name: Build Standalone iOS IPA from NUP
